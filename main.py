@@ -6,7 +6,7 @@ app = FastAPI()
 
 @lru_cache()
 def get_summarizer():
-    return pipeline("summarization")
+    return pipeline("summarization", model="sshleifer/distilbart-cnn-6-6")
 
 @app.get("/")
 def home():
