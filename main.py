@@ -1,8 +1,12 @@
 from fastapi import FastAPI
 from transformers import pipeline
+from functools import lru_cache
 
 app = FastAPI()
-summarizer = pipeline("summarization")
+
+@lru_cache()
+def get_summarizer():
+    return pipeline("summarization")
 
 @app.get("/")
 def home():
@@ -10,5 +14,6 @@ def home():
 
 @app.post("/summarize")
 def summarize_text(text: str):
+    summarizer = get_summarizer()
     summary = summarizer(text, max_length=100, min_length=30, do_sample=False)
     return {"summary": summary[0]["summary_text"]}
