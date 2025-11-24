@@ -1,4 +1,5 @@
-rom fastapi import FastAPI, Response
+from fastapi import FastAPI
+from fastapi import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import pipeline
