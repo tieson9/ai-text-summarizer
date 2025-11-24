@@ -32,10 +32,10 @@ class SummarizeRequest(BaseModel):
 @app.post("/summarize")
 def summarize_text(payload: SummarizeRequest):
     summarizer = get_summarizer()
-    summary = summarizer(
+    result = summarizer(
         payload.text,
         max_length=120,
-        min_length=40,
+        min_length=30,
         do_sample=False
     )
-    return {"summary": summary[0]["summary_text"]}
+    return {"summary": result[0]["summary_text"]}
