@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import pipeline
@@ -10,7 +11,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -26,6 +27,10 @@ def get_summarizer():
 @app.get("/")
 def home():
     return {"message": "AI Summarizer API is running successfully"}
+
+@app.head("/")
+def home_head():
+    return Response(status_code=200)
 
 class SummarizeRequest(BaseModel):
     text: str
@@ -52,3 +57,7 @@ def summarize_text(payload: SummarizeRequest):
     except Exception as e:
         logging.error("Error during summarization: %s", str(e))
         return {"error": str(e)}
+
+@app.options("/summarize")
+def summarize_options():
+    return Response(status_code=204)
