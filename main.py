@@ -3,42 +3,47 @@ from fastapi import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import pipeline
-from functools import lru_cache
+from starlette.concurrency import run_in_threadpool
 import logging
-from fastapi.concurrency import run_in_threadpool
 
+# -----------------------------------------------------------
+# Logging
+# -----------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
+
+# -----------------------------------------------------------
+# App Setup
+# -----------------------------------------------------------
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],        # Allow any frontend
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Cache the model so it loads only once
-@lru_cache()
-def get_summarizer():
-    return pipeline(
-        "summarization",
-        model="facebook/bart-large-cnn"   # <-- NEW MODEL HERE
-    )
+# -----------------------------------------------------------
+# Load summarizer ONCE (critical for Render free tier)
+# -----------------------------------------------------------
+logging.info("Loading summarization model...")
+summarizer = pipeline(
+    "summarization",
+    model="sshleifer/distilbart-cnn-12-6"   # LIGHT MODEL (works on free tier)
+)
+logging.info("Model loaded successfully!")
 
-@app.get("/")
-def home():
-    return {"message": "AI Summarizer API is running successfully"}
-
-@app.head("/")
-def home_head():
-    return Response(status_code=200)
-
+# -----------------------------------------------------------
+# Request Model
+# -----------------------------------------------------------
 class SummaryRequest(BaseModel):
     text: str
 
+# -----------------------------------------------------------
+# Summarizer function (thread-safe)
+# -----------------------------------------------------------
 def summarize_with_bart(text: str) -> str:
-    summarizer = get_summarizer()
     result = summarizer(
         text,
         max_length=120,
@@ -47,12 +52,27 @@ def summarize_with_bart(text: str) -> str:
     )
     return result[0]["summary_text"]
 
+# -----------------------------------------------------------
+# Routes
+# -----------------------------------------------------------
+@app.get("/")
+def home():
+    return {"message": "AI Summarizer API is running successfully"}
+
+@app.head("/")
+def home_head():
+    return Response(status_code=200)
+
 @app.post("/summarize")
 async def summarize_text(req: SummaryRequest):
-    logging.info(f"Received text: {req.text}")
+    logging.info("Received text of length %d", len(req.text))
+
     try:
         summary = await run_in_threadpool(summarize_with_bart, req.text)
-        return {"summary": summary}
+        return {
+            "summary": summary,
+            "important_sentences": summary.split(". ")[:3]  # optional extra output
+        }
     except Exception as e:
         logging.error("Error during summarization: %s", str(e))
         return {"error": str(e)}
