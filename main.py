@@ -5,7 +5,9 @@ from pydantic import BaseModel
 from transformers import pipeline
 from functools import lru_cache
 import logging
+from fastapi.concurrency import run_in_threadpool
 
+logging.basicConfig(level=logging.INFO)
 app = FastAPI()
 
 app.add_middleware(
@@ -32,28 +34,25 @@ def home():
 def home_head():
     return Response(status_code=200)
 
-class SummarizeRequest(BaseModel):
+class SummaryRequest(BaseModel):
     text: str
 
+def summarize_with_bart(text: str) -> str:
+    summarizer = get_summarizer()
+    result = summarizer(
+        text,
+        max_length=120,
+        min_length=30,
+        do_sample=False
+    )
+    return result[0]["summary_text"]
+
 @app.post("/summarize")
-def summarize_text(payload: SummarizeRequest):
-    logging.basicConfig(level=logging.INFO)
-    logging.info("Received text: %s", payload.text[:200])
+async def summarize_text(req: SummaryRequest):
+    logging.info(f"Received text: {req.text}")
     try:
-        summarizer = get_summarizer()
-        logging.info("Model loaded successfully")
-        result = summarizer(
-            payload.text,
-            max_length=120,
-            min_length=30,
-            do_sample=False
-        )
-        logging.info("Summarization completed")
-        logging.info("Summary: %s", result[0]["summary_text"])
-        return {
-            "summary": result[0]["summary_text"],
-            "important_sentences": result[0]["summary_text"].split(". ")[:3]
-        }
+        summary = await run_in_threadpool(summarize_with_bart, req.text)
+        return {"summary": summary}
     except Exception as e:
         logging.error("Error during summarization: %s", str(e))
         return {"error": str(e)}
