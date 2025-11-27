@@ -148,27 +148,7 @@ def summarize_options() -> Response:
     """CORS preflight endpoint."""
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-@app.post("/test-provider", response_model=ProviderTestResponse, tags=["provider"])
-async def test_provider(payload: ProviderPayload) -> ProviderTestResponse:
-    """Makes a minimal provider request to verify credentials and connectivity."""
-    try:
-        if payload.provider == "openai":
-            _ = await _call_openai_chat(payload.model, payload.api_key, [{"role": "user", "content": payload.text}])
-        elif payload.provider == "groq":
-            _ = await _call_groq_chat(payload.model, payload.api_key, [{"role": "user", "content": payload.text}])
-        elif payload.provider == "deepseek":
-            _ = await _call_deepseek_chat(payload.model, payload.api_key, [{"role": "user", "content": payload.text}])
-        elif payload.provider == "mistral":
-            _ = await _call_mistral_chat(payload.model, payload.api_key, [{"role": "user", "content": payload.text}])
-        elif payload.provider == "google":
-            _ = await _call_google_generate(payload.model, payload.api_key, payload.text)
-        else:
-            return ProviderTestResponse(error="Unsupported provider")
-        return ProviderTestResponse(provider_status="OK")
-    except HTTPException as he:
-        return ProviderTestResponse(error=he.detail)
-    except Exception:
-        return ProviderTestResponse(error="Provider request failed")
+ 
 
 @app.post("/summarize", response_model=SummarizeResponse, tags=["summarize"])
 async def summarize(payload: ProviderPayload) -> SummarizeResponse:
@@ -209,3 +189,65 @@ async def summarize(payload: ProviderPayload) -> SummarizeResponse:
     except Exception:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Provider request failed")
     return SummarizeResponse(summary=summary_text)
+
+@app.post("/test-provider")
+async def test_provider(req: dict):
+    provider = req.get("provider")
+    api_key = req.get("api_key")
+    model = req.get("model")
+    if not provider or not api_key or not model:
+        return {"error": "provider, model, and api_key are required"}
+    try:
+        p = str(provider).lower()
+        if p == "openai":
+            return await test_openai(api_key, model)
+        elif p in ("gemini", "google"):
+            return await test_gemini(api_key, model)
+        elif p == "groq":
+            return await test_groq(api_key, model)
+        elif p == "deepseek":
+            return await test_deepseek(api_key, model)
+        else:
+            return {"error": "Unknown provider"}
+    except Exception as e:
+        return {"error": str(e)}
+
+async def test_openai(api_key: str, model: str) -> dict:
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 10}
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(url, json=payload, headers=headers)
+    if r.status_code == 200:
+        return {"provider": "openai", "status": "OK"}
+    return {"provider": "openai", "error": r.text}
+
+async def test_gemini(api_key: str, model: str) -> dict:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    params = {"key": api_key}
+    payload = {"contents": [{"parts": [{"text": "ping"}]}]}
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(url, params=params, json=payload)
+    if r.status_code == 200:
+        return {"provider": "gemini", "status": "OK"}
+    return {"provider": "gemini", "error": r.text}
+
+async def test_groq(api_key: str, model: str) -> dict:
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 10}
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(url, json=payload, headers=headers)
+    if r.status_code == 200:
+        return {"provider": "groq", "status": "OK"}
+    return {"provider": "groq", "error": r.text}
+
+async def test_deepseek(api_key: str, model: str) -> dict:
+    url = "https://api.deepseek.com/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 10}
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(url, json=payload, headers=headers)
+    if r.status_code == 200:
+        return {"provider": "deepseek", "status": "OK"}
+    return {"provider": "deepseek", "error": r.text}
