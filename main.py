@@ -55,85 +55,154 @@ async def _call_openai_chat(model: str, api_key: str, messages: list[dict]) -> s
     url = "https://api.openai.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     body = {"model": model, "messages": messages, "max_tokens": 256, "temperature": 0.2}
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.post(url, headers=headers, json=body)
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(url, headers=headers, json=body)
+    except httpx.TimeoutException:
+        raise HTTPException(status.HTTP_408_REQUEST_TIMEOUT, "OpenAI timeout")
+    except httpx.RequestError as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"OpenAI network error: {e}")
+
     if r.status_code == 401:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OpenAI authentication failed")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid OpenAI API key")
+    if r.status_code == 404:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Model '{model}' not found on OpenAI")
     if r.status_code == 429:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="OpenAI rate limit exceeded")
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "OpenAI rate limit exceeded")
     if r.is_error:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"OpenAI error: {r.text}")
-    data = r.json()
-    return data["choices"][0]["message"]["content"].strip()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"OpenAI error: {r.text}")
+
+    try:
+        data = r.json()
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"OpenAI returned invalid JSON: {r.text}")
 
 async def _call_groq_chat(model: str, api_key: str, messages: list[dict]) -> str:
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     body = {"model": model, "messages": messages, "max_tokens": 256, "temperature": 0.2}
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.post(url, headers=headers, json=body)
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(url, headers=headers, json=body)
+    except httpx.TimeoutException:
+        raise HTTPException(status.HTTP_408_REQUEST_TIMEOUT, "Groq timeout")
+    except httpx.RequestError as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"Groq network error: {e}")
+
     if r.status_code == 401:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Groq authentication failed")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Groq API key")
+    if r.status_code == 404:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Model '{model}' not found on Groq")
     if r.status_code == 429:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Groq rate limit exceeded")
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Groq rate limit exceeded")
     if r.is_error:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Groq error: {r.text}")
-    data = r.json()
-    return data["choices"][0]["message"]["content"].strip()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Groq error: {r.text}")
+
+    try:
+        data = r.json()
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Groq returned invalid JSON: {r.text}")
 
 async def _call_deepseek_chat(model: str, api_key: str, messages: list[dict]) -> str:
     url = "https://api.deepseek.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     body = {"model": model, "messages": messages, "max_tokens": 256, "temperature": 0.2}
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.post(url, headers=headers, json=body)
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(url, headers=headers, json=body)
+    except httpx.TimeoutException:
+        raise HTTPException(status.HTTP_408_REQUEST_TIMEOUT, "DeepSeek timeout")
+    except httpx.RequestError as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"DeepSeek network error: {e}")
+
     if r.status_code == 401:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="DeepSeek authentication failed")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid DeepSeek API key")
+    if r.status_code == 404:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Model '{model}' not found on DeepSeek")
     if r.status_code == 429:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="DeepSeek rate limit exceeded")
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "DeepSeek rate limit exceeded")
     if r.is_error:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"DeepSeek error: {r.text}")
-    data = r.json()
-    return data["choices"][0]["message"]["content"].strip()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"DeepSeek error: {r.text}")
+
+    try:
+        data = r.json()
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"DeepSeek returned invalid JSON: {r.text}")
 
 async def _call_mistral_chat(model: str, api_key: str, messages: list[dict]) -> str:
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     body = {"model": model, "messages": messages, "max_tokens": 256, "temperature": 0.2}
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.post(url, headers=headers, json=body)
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(url, headers=headers, json=body)
+    except httpx.TimeoutException:
+        raise HTTPException(status.HTTP_408_REQUEST_TIMEOUT, "Mistral timeout")
+    except httpx.RequestError as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"Mistral network error: {e}")
+
     if r.status_code == 401:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Mistral authentication failed")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Mistral API key")
+    if r.status_code == 404:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Model '{model}' not found on Mistral")
     if r.status_code == 429:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Mistral rate limit exceeded")
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Mistral rate limit exceeded")
     if r.is_error:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Mistral error: {r.text}")
-    data = r.json()
-    return data["choices"][0]["message"]["content"].strip()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Mistral error: {r.text}")
+
+    try:
+        data = r.json()
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Mistral returned invalid JSON: {r.text}")
 
 async def _call_google_generate(model: str, api_key: str, text: str) -> str:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     params = {"key": api_key}
     body = {"contents": [{"parts": [{"text": text}]}]}
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.post(url, params=params, json=body)
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(url, params=params, json=body)
+    except httpx.TimeoutException:
+        raise HTTPException(status.HTTP_408_REQUEST_TIMEOUT, "Google Gemini timeout")
+    except httpx.RequestError as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"Google network error: {e}")
+
     if r.status_code == 401:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google authentication failed")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Google API key")
+    if r.status_code == 404:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Model '{model}' not found on Google Gemini")
     if r.status_code == 429:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Google rate limit exceeded")
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Google rate limit exceeded")
     if r.is_error:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Google error: {r.text}")
-    data = r.json()
-    if "candidates" in data and data["candidates"]:
-        candidate = data["candidates"][0]
-        parts = candidate.get("content", {}).get("parts") or candidate.get("content", {}).get("parts", [])
-        if parts:
-            for p in parts:
-                if "text" in p:
-                    return p["text"].strip()
-    if "text" in data:
-        return str(data["text"]).strip()
-    raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Google response missing text")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Google error: {r.text}")
+
+    try:
+        data = r.json()
+    except Exception:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Google returned invalid JSON: {r.text}")
+
+    # Extract text safely across candidate formats
+    try:
+        if isinstance(data, dict):
+            candidates = data.get("candidates")
+            if candidates:
+                cand = candidates[0]
+                content = cand.get("content") or {}
+                parts = content.get("parts") or []
+                for p in parts:
+                    t = p.get("text")
+                    if t:
+                        return str(t).strip()
+        t2 = data.get("text")
+        if t2:
+            return str(t2).strip()
+    except Exception:
+        pass
+    raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Google response missing text")
 
 @app.get("/", response_model=dict, tags=["health"])
 def health() -> dict:
@@ -154,42 +223,79 @@ def summarize_options() -> Response:
 
 @app.post("/summarize", response_model=SummarizeResponse, tags=["summarize"])
 async def summarize(payload: ProviderPayload) -> SummarizeResponse:
-    """Summarizes input text using the selected provider and model."""
+    """Summarizes input text using the selected provider and model with clean error handling."""
+
     if not payload.api_key or len(payload.api_key.strip()) < 10:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid API key format")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid API key format",
+        )
+
     try:
         if payload.provider == "openai":
             summary_text = await _call_openai_chat(
                 payload.model,
                 payload.api_key,
-                [{"role": "system", "content": "Summarize clearly and concisely."}, {"role": "user", "content": payload.text}],
+                [
+                    {"role": "system", "content": "Summarize clearly and concisely."},
+                    {"role": "user", "content": payload.text},
+                ],
             )
         elif payload.provider == "groq":
             summary_text = await _call_groq_chat(
                 payload.model,
                 payload.api_key,
-                [{"role": "system", "content": "Summarize clearly and concisely."}, {"role": "user", "content": payload.text}],
+                [
+                    {"role": "system", "content": "Summarize clearly and concisely."},
+                    {"role": "user", "content": payload.text},
+                ],
             )
         elif payload.provider == "deepseek":
             summary_text = await _call_deepseek_chat(
                 payload.model,
                 payload.api_key,
-                [{"role": "system", "content": "Summarize clearly and concisely."}, {"role": "user", "content": payload.text}],
+                [
+                    {"role": "system", "content": "Summarize clearly and concisely."},
+                    {"role": "user", "content": payload.text},
+                ],
             )
         elif payload.provider == "mistral":
             summary_text = await _call_mistral_chat(
                 payload.model,
                 payload.api_key,
-                [{"role": "system", "content": "Summarize clearly and concisely."}, {"role": "user", "content": payload.text}],
+                [
+                    {"role": "system", "content": "Summarize clearly and concisely."},
+                    {"role": "user", "content": payload.text},
+                ],
             )
         elif payload.provider == "google":
-            summary_text = await _call_google_generate(payload.model, payload.api_key, payload.text)
+            summary_text = await _call_google_generate(
+                payload.model, payload.api_key, payload.text
+            )
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported provider")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported provider",
+            )
+
     except HTTPException as he:
         raise he
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Provider request failed")
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail="Provider timeout – the AI model took too long to respond.",
+        )
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Network error contacting provider: {str(e)}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected provider error: {str(e)}",
+        )
+
     return SummarizeResponse(summary=summary_text)
 
 @app.post("/test-provider")
@@ -222,7 +328,7 @@ async def test_openai(api_key: str, model: str) -> dict:
         r = await client.post(url, json=payload, headers=headers)
     if r.status_code == 200:
         return {"provider": "openai", "status": "OK"}
-    return {"provider": "openai", "error": r.text}
+    return {"provider": "openai", "error": r.text} 
 
 async def test_gemini(api_key: str, model: str) -> dict:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
