@@ -162,7 +162,7 @@ async def _call_mistral_chat(model: str, api_key: str, messages: list[dict]) -> 
 async def _call_google_generate(model: str, api_key: str, text: str) -> str:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     params = {"key": api_key}
-    body = {"contents": [{"parts": [{"text": text}]}]}
+    body = {"contents": [{"role": "user", "parts": [{"text": text}]}]}
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.post(url, params=params, json=body)
@@ -177,6 +177,8 @@ async def _call_google_generate(model: str, api_key: str, text: str) -> str:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Model '{model}' not found on Google Gemini")
     if r.status_code == 429:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Google rate limit exceeded")
+    if r.status_code == 400:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Google bad request: {r.text}")
     if r.is_error:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Google error: {r.text}")
 
@@ -333,7 +335,7 @@ async def test_openai(api_key: str, model: str) -> dict:
 async def test_gemini(api_key: str, model: str) -> dict:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     params = {"key": api_key}
-    payload = {"contents": [{"parts": [{"text": "ping"}]}]}
+    payload = {"contents": [{"role": "user", "parts": [{"text": "ping"}]}]}
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.post(url, params=params, json=payload)
     if r.status_code == 200:
