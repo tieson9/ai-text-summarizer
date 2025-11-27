@@ -1,9 +1,11 @@
-from typing import Literal
+from typing import Literal, Optional, Dict, Any
 import logging
 import httpx
 from fastapi import FastAPI, Response, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, AnyHttpUrl
+import time
+from xml.etree import ElementTree as ET
 
 logging.basicConfig(level=logging.INFO)
 
@@ -251,3 +253,114 @@ async def test_deepseek(api_key: str, model: str) -> dict:
     if r.status_code == 200:
         return {"provider": "deepseek", "status": "OK"}
     return {"provider": "deepseek", "error": r.text}
+
+class APITestRequest(BaseModel):
+    url: AnyHttpUrl
+    method: Literal["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    headers: Optional[Dict[str, str]] = None
+    params: Optional[Dict[str, Any]] = None
+    body: Optional[Any] = None
+    auth_type: Literal["none", "bearer", "basic"] = "none"
+    bearer_token: Optional[str] = None
+    basic_username: Optional[str] = None
+    basic_password: Optional[str] = None
+    graphql: bool = False
+    graphql_query: Optional[str] = None
+    graphql_variables: Optional[Dict[str, Any]] = None
+    timeout_sec: float = 15.0
+
+    @validator("timeout_sec")
+    def _valid_timeout(cls, v: float) -> float:
+        if v <= 0 or v > 120:
+            raise ValueError("timeout_sec must be between 0 and 120")
+        return v
+
+@app.post("/test-api", tags=["testing"])
+async def test_api(req: APITestRequest) -> Dict[str, Any]:
+    hdrs: Dict[str, str] = dict(req.headers or {})
+    auth = None
+    if req.auth_type == "bearer":
+        if not req.bearer_token:
+            return {"success": False, "error": "missing bearer_token"}
+        hdrs["Authorization"] = f"Bearer {req.bearer_token}"
+    elif req.auth_type == "basic":
+        if not req.basic_username or not req.basic_password:
+            return {"success": False, "error": "missing basic credentials"}
+        auth = (req.basic_username, req.basic_password)
+
+    json_body = None
+    data_body = None
+    if req.graphql:
+        if not req.graphql_query:
+            return {"success": False, "error": "missing graphql_query"}
+        hdrs.setdefault("Content-Type", "application/json")
+        json_body = {"query": req.graphql_query, "variables": req.graphql_variables or {}}
+        method = "POST"
+    else:
+        method = req.method
+        if isinstance(req.body, dict):
+            hdrs.setdefault("Content-Type", "application/json")
+            json_body = req.body
+        elif isinstance(req.body, str):
+            data_body = req.body
+
+    start = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=req.timeout_sec) as client:
+            r = await client.request(
+                method,
+                str(req.url),
+                headers=hdrs,
+                params=req.params,
+                json=json_body,
+                data=data_body,
+                auth=auth,
+            )
+    except httpx.TimeoutException:
+        return {"success": False, "error": "timeout"}
+    except httpx.RequestError as e:
+        return {"success": False, "error": f"request_error: {str(e)}"}
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+
+    ctype = r.headers.get("Content-Type", "")
+    lower_ctype = ctype.lower()
+    json_valid = False
+    xml_valid = False
+    graphql_valid = False
+    parsed_preview = None
+
+    if "json" in lower_ctype:
+        try:
+            obj = r.json()
+            json_valid = True
+            if req.graphql:
+                graphql_valid = isinstance(obj, dict) and ("data" in obj) and ("errors" not in obj)
+            parsed_preview = obj if isinstance(obj, dict) else obj
+        except Exception:
+            json_valid = False
+    elif "xml" in lower_ctype:
+        try:
+            root = ET.fromstring(r.text)
+            xml_valid = True
+            parsed_preview = root.tag
+        except Exception:
+            xml_valid = False
+    else:
+        parsed_preview = (r.text or "")[:500]
+
+    ok_status = 200 <= r.status_code < 300
+    success = ok_status and ((json_valid and (not req.graphql or graphql_valid)) or xml_valid or (parsed_preview is not None))
+
+    return {
+        "success": success,
+        "status_code": r.status_code,
+        "response_time_ms": elapsed_ms,
+        "content_type": ctype,
+        "headers": dict(r.headers),
+        "validation": {
+            "json_valid": json_valid,
+            "xml_valid": xml_valid,
+            "graphql_valid": graphql_valid,
+        },
+        "body_preview": parsed_preview if isinstance(parsed_preview, str) else str(parsed_preview)[:500],
+    }
